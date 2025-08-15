@@ -38,3 +38,9 @@ approach was not pursued as the administrator did not provide access to Cloud Sc
 This approach was not pursued as the administrator did not provide access to Secrets Manager.
 3. Deploying cloud function and cloud scheduler as code, perhaps changing cloud function trigger to Pub/Sub. This
 approach was not pursued due to missing permissions.
+4. Instead of downloading the latest data, the cloud function could extract only data for the previous 24 hours 
+to ensure continuity. 
+5. Sensor data should be validated looking for anomalies (e.g. missing values, excessively low/high values, etc.). 
+The assumption here was that this post-processing will happen in the data warehouse, so that the raw data is stored
+unchanged.
+
