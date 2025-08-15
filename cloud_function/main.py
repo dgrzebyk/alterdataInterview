@@ -14,8 +14,7 @@ from utils import upload_blob
 
 
 @functions_framework.http
-def openaq_data_download(cloud_event: CloudEvent):
-    data = cloud_event.data
+def openaq_data_download(request):
     if not os.environ.get("API_KEY"):
         raise ValueError("API_KEY environment variable not set")
 
