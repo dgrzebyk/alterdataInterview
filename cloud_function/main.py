@@ -13,7 +13,7 @@ from openaq import OpenAQ
 from utils import upload_blob
 
 
-@functions_framework.cloud_event
+@functions_framework.http
 def openaq_data_download(cloud_event: CloudEvent):
     data = cloud_event.data
     if not os.environ.get("API_KEY"):
@@ -26,13 +26,6 @@ def openaq_data_download(cloud_event: CloudEvent):
     }
     radius = 10000  # 10 km promień od centrum miasta - obszar w którym będą wyszukiwane stacje pomiarowe
     bucket_name = 'openaq-weather-data'
-
-    # Variables required for logging
-    event_id = cloud_event["id"]
-    event_type = cloud_event["type"]
-    metageneration = data["metageneration"]
-    timeCreated = data["timeCreated"]
-    updated = data["updated"]
 
     api_key = os.getenv('API_KEY')
     client = OpenAQ(api_key=api_key)
@@ -101,4 +94,4 @@ def openaq_data_download(cloud_event: CloudEvent):
 
     client.close()
 
-    return event_id, event_type, bucket_name, file_name, metageneration, timeCreated, updated
+    return 'OK'
