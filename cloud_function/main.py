@@ -8,7 +8,6 @@ import pandas as pd
 
 from datetime import datetime
 
-from cloudevents.http import CloudEvent
 from openaq import OpenAQ
 from utils import upload_blob
 
