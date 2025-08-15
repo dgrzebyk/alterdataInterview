@@ -38,7 +38,7 @@ def validate_locations(locations_df: pd.DataFrame, city: str) -> List[int]:
     """Validate and extract station IDs for a city."""
     locations_ids = locations_df['id'].to_list()
     if len(locations_ids) < 3:
-        logging.error(f"ERROR: Dla miasta {city} nie znaleziono co najmniej 3 stacji pomiarowych.")
+        logging.error(f"City of {city} does not have at least 3 weather measurement stations.")
         return []
     return locations_ids
 
