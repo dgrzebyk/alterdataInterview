@@ -21,7 +21,14 @@ b. The resulting file containing the processed data must be loaded into a bucket
 ## Cloud Function Deployment
 Cloud function can be deployed by calling the command below from the cloud_function/ directory.
 ```gcloud
-gcloud functions deploy openaq_data_download --gen2 --runtime=python312 --region=europe-central2 --source=. --entry-point=openaq_data_download --set-env-vars API_KEY=YOUR_API_KEY --trigger-http
+gcloud functions deploy openaq_data_download \
+    --gen2 \
+    --runtime=python312 \
+    --region=europe-central2 \
+    --source=. \
+    --entry-point=openaq_data_download \
+    --set-env-vars API_KEY=YOUR_API_KEY \
+    --trigger-http
 ```
 
 ## Potential Improvements
