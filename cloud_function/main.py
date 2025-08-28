@@ -120,7 +120,7 @@ def upload_to_gcs(results_df: pd.DataFrame, bucket_name: str) -> None:
     logging.info("Results uploaded to GCS.")
 
 
-# @functions_framework.http
+@functions_framework.http
 def openaq_data_download(request):
     if not os.environ.get("API_KEY"):
         raise ValueError("API_KEY environment variable not set")
