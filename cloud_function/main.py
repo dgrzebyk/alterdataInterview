@@ -17,18 +17,8 @@ from typing import Tuple, List
 from utils import upload_blob
 
 
-# Constants
-CITIES = ["Warsaw", "London"]
-RADIUS: int = 10000  # 10 km
-BUCKET_NAME: str = 'openaq-weather-data'
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-
-if RADIUS < 0 or RADIUS > 25000:
-    logging.error("RADIUS must be greater than 0 and less than 25000 meters.")
-
-CITIES = [city for city in CITIES if city.strip().capitalize()]
 
 def get_city_coordinates(city: str) -> Tuple[float, float]:
     logging.info("Obtaining city coordinates...")
@@ -47,11 +37,11 @@ def get_city_coordinates(city: str) -> Tuple[float, float]:
     return location.latitude, location.longitude
 
 
-def get_locations(client: OpenAQ, city: str) -> pd.DataFrame:
+def get_locations(client: OpenAQ, city: str, RADIUS: int) -> pd.DataFrame:
     """Fetch measurement station locations for a city."""
     coordinates = get_city_coordinates(city)
     if coordinates is None:
-        logging.error(f"Coordinates of {city} not found.")
+        logging.error(f"{city} coordinates not found.")
         return pd.DataFrame()
     else:
         logging.info(f"Downloading list of stations in {city}...")
@@ -65,14 +55,14 @@ def get_locations(client: OpenAQ, city: str) -> pd.DataFrame:
 def validate_locations(locations_df: pd.DataFrame, city: str) -> List[int]:
     """Validate and extract station IDs for a city."""
     logging.info("Validating locations...")
-    locations_ids = locations_df['id'].to_list()
 
     # Eliminate stations that are no longer in use
     locations_df['last_date'] = pd.to_datetime(locations_df['datetime_last.utc'], utc=True).dt.date
     locations_df = locations_df.loc[locations_df['last_date'] >= datetime.today().date()]
     if len(locations_df) == 0:
-        logging.error(f"No stations available for {city} are in use.")
+        logging.error(f"Stations available for {city} are no longer in use.")
 
+    locations_ids = locations_df['id'].to_list()
     if len(locations_ids) < 3:
         logging.error(f"{city} does not have at least 3 weather measurement stations.")
         return []
@@ -110,7 +100,7 @@ def process_measurements(client: OpenAQ, locations_ids: List[int], locations_df:
 
 def upload_to_gcs(results_df: pd.DataFrame, bucket_name: str) -> None:
     """Upload pandas DataFrame as a .CSV to GCS."""
-    logging.info("Uploading results to GCS.")
+    logging.info("Uploading results to GCS...")
     dt_now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     upload_blob(
         bucket_name=bucket_name, 
@@ -122,6 +112,17 @@ def upload_to_gcs(results_df: pd.DataFrame, bucket_name: str) -> None:
 
 @functions_framework.http
 def openaq_data_download(request):
+
+    # Constants
+    CITIES: list = ["Warsaw", "London"]
+    RADIUS: int = 10000  # 10 km
+    BUCKET_NAME: str = 'openaq-weather-data'
+
+    if RADIUS < 0 or RADIUS > 25000:
+        logging.error("RADIUS must be greater than 0 and less than 25000 meters.")
+
+    CITIES = [city for city in CITIES if city.strip().capitalize()]
+
     if not os.environ.get("API_KEY"):
         raise ValueError("API_KEY environment variable not set")
 
@@ -130,7 +131,7 @@ def openaq_data_download(request):
 
     with OpenAQ(api_key=api_key) as client:
         for city in CITIES:
-            locations_df = get_locations(client, city)
+            locations_df = get_locations(client, city, RADIUS)
             locations_ids = validate_locations(locations_df, city)
             if not locations_ids:
                 continue
