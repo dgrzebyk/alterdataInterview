@@ -31,7 +31,7 @@ if RADIUS < 0 or RADIUS > 25000:
 CITIES = [city for city in CITIES if city.strip().capitalize()]
 
 def get_city_coordinates(city: str) -> Tuple[float, float]:
-    logging.info("Obtaining city coordinates.")
+    logging.info("Obtaining city coordinates...")
 
     # Create an SSL context using certifi's certificate bundle
     ctx = ssl.create_default_context(cafile=certifi.where())
@@ -54,7 +54,7 @@ def get_locations(client: OpenAQ, city: str) -> pd.DataFrame:
         logging.error(f"Coordinates of {city} not found.")
         return pd.DataFrame()
     else:
-        logging.info(f"Download list of stations in {city}.")
+        logging.info(f"Downloading list of stations in {city}...")
         response = client.locations.list(coordinates=coordinates, radius=RADIUS, limit=1000)
         locations_dict = response.dict()
         locations_df = pd.json_normalize(locations_dict['results'])
@@ -64,6 +64,7 @@ def get_locations(client: OpenAQ, city: str) -> pd.DataFrame:
 
 def validate_locations(locations_df: pd.DataFrame, city: str) -> List[int]:
     """Validate and extract station IDs for a city."""
+    logging.info("Validating locations...")
     locations_ids = locations_df['id'].to_list()
 
     # Eliminate stations that are no longer in use
@@ -76,11 +77,13 @@ def validate_locations(locations_df: pd.DataFrame, city: str) -> List[int]:
         logging.error(f"{city} does not have at least 3 weather measurement stations.")
         return []
     else:
+        logging.info("Locations validated.")
         return locations_ids
 
 
 def process_measurements(client: OpenAQ, locations_ids: List[int], locations_df: pd.DataFrame) -> pd.DataFrame:
     """Fetch and process measurement data."""
+    logging.info("Downloading measurement data...")
     measurements_list = []
     for location_id in locations_ids:
         measurements = client.locations.latest(locations_id=location_id)
@@ -100,18 +103,21 @@ def process_measurements(client: OpenAQ, locations_ids: List[int], locations_df:
     measurements_df.drop(columns=['datetime', 'coordinates'], inplace=True)
 
     measurements_df = measurements_df.loc[measurements_df['parameter'].isin(['no2', 'o3', 'pm10', 'pm25'])]
+    logging.info("Measurements downloaded.")
 
     return measurements_df
 
 
 def upload_to_gcs(results_df: pd.DataFrame, bucket_name: str) -> None:
     """Upload pandas DataFrame as a .CSV to GCS."""
+    logging.info("Uploading results to GCS.")
     dt_now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     upload_blob(
         bucket_name=bucket_name, 
         df=results_df[['city', 'latitude', 'longitude', 'parameter', 'value', 'unit', 'datetime_utc', 'datetime_local']], 
         destination_blob_name=f"{dt_now}.csv"
     )
+    logging.info("Results uploaded to GCS.")
 
 
 # @functions_framework.http
