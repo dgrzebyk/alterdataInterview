@@ -102,12 +102,8 @@ def upload_to_gcs(results_df: pd.DataFrame, bucket_name: str) -> None:
     """Upload pandas DataFrame as a .CSV to GCS."""
     logging.info("Uploading results to GCS...")
     dt_now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    upload_blob(
-        bucket_name=bucket_name, 
-        df=results_df[['city', 'latitude', 'longitude', 'parameter', 'value', 'unit', 'datetime_utc', 'datetime_local']], 
-        destination_blob_name=f"{dt_now}.csv"
-    )
-    logging.info("Results uploaded to GCS.")
+    upload_blob(bucket_name=bucket_name, df=results_df, destination_blob_name=f"{dt_now}.csv")
+    logging.info("Results uploaded.")
 
 
 @functions_framework.http
@@ -116,7 +112,7 @@ def openaq_data_download(request):
     # Constants
     CITIES: list = ["Warsaw", "London"]
     RADIUS: int = 10000  # 10 km
-    BUCKET_NAME: str = 'openaq-weather-data'
+    BUCKET_NAME: str = 'dg_test_1'
 
     if RADIUS < 0 or RADIUS > 25000:
         logging.error("RADIUS must be greater than 0 and less than 25000 meters.")
@@ -154,4 +150,3 @@ def openaq_data_download(request):
             upload_to_gcs(results_df, BUCKET_NAME)
 
     return 'OK'
-
