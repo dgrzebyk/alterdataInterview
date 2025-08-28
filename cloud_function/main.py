@@ -1,37 +1,60 @@
-# Data:  15.08.2025
+# Data:  28.08.2025
 # Autor: Daniel Grzebyk
 
 
-import os
+import certifi
 import functions_framework
 import logging
+import os
+import ssl
+
 import pandas as pd
 
 from datetime import datetime
-
+from geopy.geocoders import Nominatim
 from openaq import OpenAQ
-from typing import Dict, Tuple, List
+from typing import Tuple, List
 from utils import upload_blob
 
 
 # Constants
-CITY_COORDINATES: Dict[str, Tuple[float, float]] = {
-    "Warszawa": (52.2297, 21.0122),
-    "Londyn": (51.5072, 0.1276)
-}
+CITIES = ["Warsaw", "London"]
 RADIUS: int = 10000  # 10 km
 BUCKET_NAME: str = 'openaq-weather-data'
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
+if RADIUS < 0 or RADIUS > 25000:
+    logging.error("RADIUS must be greater than 0 and less than 25000 meters.")
 
-def get_locations(client: OpenAQ, city: str, coordinates: Tuple[float, float]) -> pd.DataFrame:
+CITIES = [city for city in CITIES if city.strip().capitalize()]
+
+def get_city_coordinates(city: str) -> Tuple[float, float]:
+    # Create an SSL context using certifi's certificate bundle
+    ctx = ssl.create_default_context(cafile=certifi.where())
+
+    # Pass the custom SSL context to the geolocator
+    geolocator = Nominatim(
+        user_agent='myapplication',
+        ssl_context=ctx
+    )
+
+    location = geolocator.geocode(city)
+    return location.latitude, location.longitude
+
+
+def get_locations(client: OpenAQ, city: str) -> pd.DataFrame:
     """Fetch measurement station locations for a city."""
-    response = client.locations.list(coordinates=coordinates, radius=RADIUS, limit=1000)
-    locations_dict = response.dict()
-    locations_df = pd.json_normalize(locations_dict['results'])
-    return locations_df
+    coordinates = get_city_coordinates(city)
+    if coordinates is None:
+        logging.error("Given city name does not exist.")
+        return pd.DataFrame()
+    else:
+        response = client.locations.list(coordinates=coordinates, radius=RADIUS, limit=1000)
+        locations_dict = response.dict()
+        locations_df = pd.json_normalize(locations_dict['results'])
+        return locations_df
 
 
 def validate_locations(locations_df: pd.DataFrame, city: str) -> List[int]:
@@ -68,16 +91,17 @@ def process_measurements(client: OpenAQ, locations_ids: List[int], locations_df:
     return measurements_df
 
 
-def save_to_csv_and_upload(results_df: pd.DataFrame, bucket_name: str) -> None:
-    """Save results to a CSV file and upload to GCS."""
+def upload_to_gcs(results_df: pd.DataFrame, bucket_name: str) -> None:
+    """Upload pandas DataFrame as a .CSV to GCS."""
     dt_now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    file_name = f"{dt_now}.csv"
-    results_df[['city', 'latitude', 'longitude', 'parameter', 'value', 'unit', 'datetime_utc',
-                'datetime_local']].to_csv(file_name, index=False)
-    upload_blob(bucket_name=bucket_name, source_file_name=file_name, destination_blob_name=file_name)
+    upload_blob(
+        bucket_name=bucket_name, 
+        df=results_df[['city', 'latitude', 'longitude', 'parameter', 'value', 'unit', 'datetime_utc', 'datetime_local']], 
+        destination_blob_name=f"{dt_now}.csv"
+    )
 
 
-@functions_framework.http
+# @functions_framework.http
 def openaq_data_download(request):
     if not os.environ.get("API_KEY"):
         raise ValueError("API_KEY environment variable not set")
@@ -86,9 +110,8 @@ def openaq_data_download(request):
     results = []
 
     with OpenAQ(api_key=api_key) as client:
-        for city, coordinates in CITY_COORDINATES.items():
-
-            locations_df = get_locations(client, city, coordinates)
+        for city in CITIES:
+            locations_df = get_locations(client, city)
             locations_ids = validate_locations(locations_df, city)
             if not locations_ids:
                 continue
@@ -108,6 +131,11 @@ def openaq_data_download(request):
         # Save and upload results
         if results:
             results_df = pd.concat(results, ignore_index=True)
-            save_to_csv_and_upload(results_df, BUCKET_NAME)
+            upload_to_gcs(results_df, BUCKET_NAME)
 
     return 'OK'
+
+
+# openaq_data_download(request=None)
+r = get_city_coordinates("Nibylandia")
+print(r)
