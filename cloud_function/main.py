@@ -31,6 +31,8 @@ if RADIUS < 0 or RADIUS > 25000:
 CITIES = [city for city in CITIES if city.strip().capitalize()]
 
 def get_city_coordinates(city: str) -> Tuple[float, float]:
+    logging.info("Obtaining city coordinates.")
+
     # Create an SSL context using certifi's certificate bundle
     ctx = ssl.create_default_context(cafile=certifi.where())
 
@@ -41,6 +43,7 @@ def get_city_coordinates(city: str) -> Tuple[float, float]:
     )
 
     location = geolocator.geocode(city)
+    logging.info("City coordinates obtained.")
     return location.latitude, location.longitude
 
 
@@ -48,22 +51,32 @@ def get_locations(client: OpenAQ, city: str) -> pd.DataFrame:
     """Fetch measurement station locations for a city."""
     coordinates = get_city_coordinates(city)
     if coordinates is None:
-        logging.error("Given city name does not exist.")
+        logging.error(f"Coordinates of {city} not found.")
         return pd.DataFrame()
     else:
+        logging.info(f"Download list of stations in {city}.")
         response = client.locations.list(coordinates=coordinates, radius=RADIUS, limit=1000)
         locations_dict = response.dict()
         locations_df = pd.json_normalize(locations_dict['results'])
+        logging.info(f"List of stations in {city} downloaded.")
         return locations_df
 
 
 def validate_locations(locations_df: pd.DataFrame, city: str) -> List[int]:
     """Validate and extract station IDs for a city."""
     locations_ids = locations_df['id'].to_list()
+
+    # Eliminate stations that are no longer in use
+    locations_df['last_date'] = pd.to_datetime(locations_df['datetime_last.utc'], utc=True).dt.date
+    locations_df = locations_df.loc[locations_df['last_date'] >= datetime.today().date()]
+    if len(locations_df) == 0:
+        logging.error(f"No stations available for {city} are in use.")
+
     if len(locations_ids) < 3:
-        logging.error(f"City of {city} does not have at least 3 weather measurement stations.")
+        logging.error(f"{city} does not have at least 3 weather measurement stations.")
         return []
-    return locations_ids
+    else:
+        return locations_ids
 
 
 def process_measurements(client: OpenAQ, locations_ids: List[int], locations_df: pd.DataFrame) -> pd.DataFrame:
@@ -76,7 +89,7 @@ def process_measurements(client: OpenAQ, locations_ids: List[int], locations_df:
 
     measurements_df = pd.concat(measurements_list, ignore_index=True)
     measurements_df = measurements_df.merge(
-        locations_df[['sensors_id', 'parameter', 'unit']],
+        locations_df[['name', 'locality', 'country.name', 'timezone', 'sensors_id', 'parameter', 'unit']],
         how='left',
         on='sensors_id'
     )
@@ -135,7 +148,3 @@ def openaq_data_download(request):
 
     return 'OK'
 
-
-# openaq_data_download(request=None)
-r = get_city_coordinates("Nibylandia")
-print(r)
